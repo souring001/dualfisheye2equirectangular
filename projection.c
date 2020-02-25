@@ -57,7 +57,7 @@ typedef struct double3 {
   double z;
 } double3;
 
-enum CameraMode { FRONT, FRONT235, BACK, UP, DOWN, SAMSUNG_GEAR_360, THETAS };
+enum CameraMode { FRONT, FRONT235, BACK, UP, DOWN, SAMSUNG_GEAR_360, THETAS, ENTANIYA_280 };
 
 typedef struct configuration {
   char *xmap_filename;
@@ -172,6 +172,8 @@ configuration parse_options(int argc, char **argv) {
         po.mode = SAMSUNG_GEAR_360;
       } else if (strcmp(optarg, "thetas") == 0) {
         po.mode = THETAS;
+    } else if (strcmp(optarg, "entaniya_280") == 0) {
+        po.mode = ENTANIYA_280;
       }
       /* more else if clauses */
       else /* default: */
@@ -583,11 +585,83 @@ void gen_front235_maps(configuration cfg, int **image_x, int **image_y) {
   printf("Front 235 proj\n");
   for (y = 0; y < cfg.rows; y++) {
     for (x = 0; x < cfg.cols; x++) {
-      double2 o = evaluatePixel_Front(
+      double2 o = evaluatePixel_Front235(
           (double2){
               ((double)x / ((double)cfg.cols)) * ((cfg.width) - (2 * cfg.crop)),
               ((double)y / (double)cfg.rows) * ((cfg.height) - (2 * cfg.crop))},
           (double2){(cfg.width) - (2 * cfg.crop), cfg.height - (2 * cfg.crop)});
+      image_x[y][x] = (int)round(o.x) + cfg.crop;
+      image_y[y][x] = (int)round(o.y) + cfg.crop;
+    }
+  }
+}
+
+double2 evaluatePixel_Front280(double2 outCoord, double2 srcSize) {
+  double2 o;
+  double theta, phi;
+  double3 sphericCoords;
+  double r;
+  double theta2;
+  double2 inCentered;
+  double fov = 280.0;
+  int target_x = 0, target_y = 480;
+
+  // convert outcoords to radians (180 = pi, so half a sphere)
+  o.x = outCoord.x / srcSize.x;
+  o.y = outCoord.y / srcSize.y;
+  theta = (o.x - 1.0) * M_PI;
+  phi = o.y * M_PI;
+
+  if((int)outCoord.x == target_x && (int)outCoord.y == target_y) printf("target_x:%f, target_y:%f\n\n", outCoord.x, outCoord.y);
+  if((int)outCoord.x == target_x && (int)outCoord.y == target_y) printf("ox:%f, oy:%f\n\n", o.x, o.y);
+  if((int)outCoord.x == target_x && (int)outCoord.y == target_y) printf("theta:%f, phi:%f\n", theta, phi);
+
+  // Convert outcoords to spherical (x,y,z on unisphere)
+  sphericCoords.x = cos(theta) * sin(phi);
+  sphericCoords.y = sin(theta) * sin(phi);
+  sphericCoords.z = cos(phi);
+
+  if((int)outCoord.x == target_x && (int)outCoord.y == target_y) printf("x:%f, y:%f, z:%f\n\n", sphericCoords.x, sphericCoords.y, sphericCoords.z);
+
+  // Convert spherical to input coordinates...
+  theta2 = atan2(-sphericCoords.z, sphericCoords.y);
+  r = acos(sphericCoords.x) / (2 * M_PI * fov / 360.0);
+
+  if((int)outCoord.x == target_x && (int)outCoord.y == target_y) printf("x:%f, acos:%f\n", sphericCoords.x, acos(sphericCoords.x));
+  if((int)outCoord.x == target_x && (int)outCoord.y == target_y) printf("theta2:%f, r:%f\n", theta2, r);
+
+  inCentered.x = ((r * cos(theta2)) + 0.5) * srcSize.x;
+  inCentered.y = ((r * sin(theta2)) + 0.5) * srcSize.y;
+
+  if((int)outCoord.x == target_x && (int)outCoord.y == target_y) printf("x:%f, y:%f\n", inCentered.x, inCentered.y);
+
+  return inCentered;
+}
+
+void gen_entaniya_280_maps(configuration cfg, int **image_x, int **image_y) {
+  int x, y;
+
+  printf("Entaniya 280 proj\n");
+  printf("cols:%d, width:%d\n", cfg.cols, cfg.width);
+  for (y = 0; y < cfg.rows; y++) {
+    for (x = 0; x < cfg.cols; x++) {
+      double2 o = evaluatePixel_Front280(
+          (double2){
+              ((double)x / ((double)cfg.cols / 2)) * ((cfg.width) - (2 * cfg.crop)),
+              ((double)y / (double)cfg.rows) * ((cfg.height) - (2 * cfg.crop))},
+          (double2){(cfg.width) - (2 * cfg.crop), cfg.height - (2 * cfg.crop)});
+
+      // if(x == cfg.rows/2) printf("%f, %f\n", o.x, o.y);
+
+      if (o.x < 0)
+        o.x = 0;
+      if (o.y < 0)
+        o.y = 0;
+      if (o.x >= cfg.width)
+        o.x = cfg.width - 1;
+      if (o.y >= cfg.height)
+        o.y = cfg.height - 1;
+
       image_x[y][x] = (int)round(o.x) + cfg.crop;
       image_y[y][x] = (int)round(o.y) + cfg.crop;
     }
@@ -627,6 +701,9 @@ int main(int argc, char **argv) {
     break;
   case THETAS:
     gen_thetas_maps(cfg, image_x, image_y);
+    break;
+  case ENTANIYA_280:
+    gen_entaniya_280_maps(cfg, image_x, image_y);
     break;
   default:
     printf("Camera mode not implemented\n");

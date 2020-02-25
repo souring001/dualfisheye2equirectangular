@@ -1,0 +1,6 @@
+*.png
+*.jpg
+*.pgm
+*.mp4
+.DS_Store
+projection
