@@ -612,28 +612,32 @@ double2 evaluatePixel_Front280(double2 outCoord, double2 srcSize) {
   theta = (o.x - 1.0) * M_PI;
   phi = o.y * M_PI;
 
-  if((int)outCoord.x == target_x && (int)outCoord.y == target_y) printf("target_x:%f, target_y:%f\n\n", outCoord.x, outCoord.y);
-  if((int)outCoord.x == target_x && (int)outCoord.y == target_y) printf("ox:%f, oy:%f\n\n", o.x, o.y);
-  if((int)outCoord.x == target_x && (int)outCoord.y == target_y) printf("theta:%f, phi:%f\n", theta, phi);
+  // if((int)outCoord.x == target_x && (int)outCoord.y == target_y) printf("target_x:%f, target_y:%f\n\n", outCoord.x, outCoord.y);
+  // if((int)outCoord.x == target_x && (int)outCoord.y == target_y) printf("ox:%f, oy:%f\n\n", o.x, o.y);
+  // if((int)outCoord.x == target_x && (int)outCoord.y == target_y) printf("theta:%f, phi:%f\n", theta, phi);
 
   // Convert outcoords to spherical (x,y,z on unisphere)
   sphericCoords.x = cos(theta) * sin(phi);
   sphericCoords.y = sin(theta) * sin(phi);
   sphericCoords.z = cos(phi);
 
-  if((int)outCoord.x == target_x && (int)outCoord.y == target_y) printf("x:%f, y:%f, z:%f\n\n", sphericCoords.x, sphericCoords.y, sphericCoords.z);
+  // if((int)outCoord.x == target_x && (int)outCoord.y == target_y) printf("x:%f, y:%f, z:%f\n\n", sphericCoords.x, sphericCoords.y, sphericCoords.z);
 
   // Convert spherical to input coordinates...
   theta2 = atan2(-sphericCoords.z, sphericCoords.y);
-  r = acos(sphericCoords.x) / (2 * M_PI * fov / 360.0);
+  r = acos(sphericCoords.x) / (M_PI  * fov / 360.0);
 
-  if((int)outCoord.x == target_x && (int)outCoord.y == target_y) printf("x:%f, acos:%f\n", sphericCoords.x, acos(sphericCoords.x));
-  if((int)outCoord.x == target_x && (int)outCoord.y == target_y) printf("theta2:%f, r:%f\n", theta2, r);
+  // lens distortion
+  double a[] = {-0.0007, 1.2855, -0.2829, 0.403, -0.4029};
+  if(0 <= r && r <= 1) r = a[0] + a[1] * r + a[2] * r * r + a[3] * r * r  * r + a[4] * r * r * r * r;
 
-  inCentered.x = ((r * cos(theta2)) + 0.5) * srcSize.x;
-  inCentered.y = ((r * sin(theta2)) + 0.5) * srcSize.y;
+  // if((int)outCoord.x == target_x && (int)outCoord.y == target_y) printf("x:%f, acos:%f\n", sphericCoords.x, acos(sphericCoords.x));
+  // if((int)outCoord.x == target_x && (int)outCoord.y == target_y) printf("theta2:%f, r:%f\n", theta2, r);
 
-  if((int)outCoord.x == target_x && (int)outCoord.y == target_y) printf("x:%f, y:%f\n", inCentered.x, inCentered.y);
+  inCentered.x = ((0.5 * r * cos(theta2)) + 0.5) * srcSize.x;
+  inCentered.y = ((0.5 * r * sin(theta2)) + 0.5) * srcSize.y;
+
+  // if((int)outCoord.x == target_x && (int)outCoord.y == target_y) printf("x:%f, y:%f\n", inCentered.x, inCentered.y);
 
   return inCentered;
 }
@@ -653,14 +657,22 @@ void gen_entaniya_280_maps(configuration cfg, int **image_x, int **image_y) {
 
       // if(x == cfg.rows/2) printf("%f, %f\n", o.x, o.y);
 
-      if (o.x < 0)
-        o.x = 0;
-      if (o.y < 0)
+      if (o.x < 0){
+        o.x = 0;    // Source(0, 0) is a black pixel.
         o.y = 0;
-      if (o.x >= cfg.width)
-        o.x = cfg.width - 1;
-      if (o.y >= cfg.height)
-        o.y = cfg.height - 1;
+      }
+      if (o.y < 0){
+        o.x = 0;
+        o.y = 0;
+      }
+      if (o.x >= cfg.width){
+        o.x = 0;
+        o.y = 0;
+      }
+      if (o.y >= cfg.height){
+        o.x = 0;
+        o.y = 0;
+      }
 
       image_x[y][x] = (int)round(o.x) + cfg.crop;
       image_y[y][x] = (int)round(o.y) + cfg.crop;
